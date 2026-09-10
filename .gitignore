@@ -1,0 +1,17 @@
+# Secrets - NEVER commit these
+service-account.json
+.env
+frontend/.env
+
+# External library sources
+drogon/
+jwt-cpp/
+
+# Build artifacts
+build/
+frontend/node_modules/
+frontend/dist/
+
+# OS/editor noise
+.DS_Store
+*.swp

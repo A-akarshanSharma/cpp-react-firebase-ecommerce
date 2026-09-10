@@ -1,0 +1,127 @@
+.site-header {
+    border-bottom: 1px solid var(--rule);
+    background: var(--paper);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.site-header__inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 22px 32px;
+    max-width: var(--container-width);
+    margin: 0 auto;
+    gap: 20px;
+}
+
+.site-header__brand {
+    font-family: var(--font-display);
+    font-size: 1.4rem;
+    color: var(--ink);
+    letter-spacing: 0.01em;
+    flex-shrink: 0;
+}
+.site-header__brand:hover { color: var(--ink); }
+
+.site-nav {
+    display: flex;
+    align-items: center;
+    gap: 28px;
+    flex-shrink: 0;
+}
+
+.site-nav__links {
+    display: flex;
+    align-items: center;
+    gap: 28px;
+}
+
+.site-nav__link {
+    color: var(--ink-soft);
+    font-size: 0.95rem;
+    white-space: nowrap;
+}
+.site-nav__link:hover { color: var(--ink); }
+
+.site-nav__link--button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font: inherit;
+    padding: 0;
+}
+
+.site-nav__cart {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--ink);
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.site-nav__badge {
+    background: var(--walnut);
+    color: white;
+    font-size: 0.7rem;
+    font-weight: 600;
+    min-width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 5px;
+}
+
+/* Hamburger toggle - hidden on desktop, only shown below the breakpoint */
+.site-nav__toggle {
+    display: none;
+    flex-direction: column;
+    justify-content: center;
+    gap: 5px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 8px;
+    margin: -8px;
+}
+.site-nav__toggle span {
+    display: block;
+    width: 20px;
+    height: 2px;
+    background: var(--ink);
+}
+
+@media (max-width: 720px) {
+    .site-header__inner { padding: 16px 20px; }
+    .site-nav { gap: 16px; }
+
+    .site-nav__toggle { display: flex; }
+
+    /* Links collapse into a dropdown panel anchored under the header,
+       instead of disappearing with no way to reach them. */
+    .site-nav__links {
+        display: none;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0;
+        background: var(--paper);
+        border-bottom: 1px solid var(--rule);
+        padding: 4px 20px 16px 20px;
+    }
+    .site-nav__links--open {
+        display: flex;
+    }
+    .site-nav__links .site-nav__link {
+        padding: 14px 0;
+        border-top: 1px solid var(--rule);
+        text-align: left;
+    }
+}

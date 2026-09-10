@@ -1,0 +1,179 @@
+/*
+  DESIGN PLAN
+  -----------
+  Subject: small apparel/lifestyle shop (inferred from your test product "Test Shirt",
+  category "clothing"). Tell me if this is wrong and the palette/type should shift.
+
+  Color (warm, considered, tailoring-adjacent - not the default AI cream+terracotta,
+  not a stark near-black+neon dashboard look):
+    --paper       #EDEAE2   page background, warm putty/sand
+    --surface     #F7F5F0   card/panel surface, slightly lighter than paper
+    --ink         #1F2A24   primary text, deep forest-black (not flat #111)
+    --ink-soft    #4B564F   secondary text
+    --walnut      #8A6E4B   primary accent - CTAs, links, focus
+    --walnut-deep #6E5638   hover/active state of the accent
+    --sage        #4C5B4E   secondary accent - tags, success states
+    --rule        #D9D4C7   hairline borders/dividers
+    --error       #A33B2E   muted brick red, not a bright alarm red
+
+  Type: Fraunces (a characterful serif with real optical personality) carries headlines
+  and anything that needs presence; Inter carries body copy and UI labels where plain
+  legibility matters more than character. Two families, clearly distinct roles.
+
+  Layout: asymmetric, generous whitespace, hairline rules instead of drop shadows,
+  near-zero border-radius. Product cards are edge-to-edge imagery with a hairline
+  top border separating text - not the identical rounded-shadow SaaS card default.
+*/
+
+:root {
+    --paper: #EDEAE2;
+    --surface: #F7F5F0;
+    --ink: #1F2A24;
+    --ink-soft: #4B564F;
+    --walnut: #8A6E4B;
+    --walnut-deep: #6E5638;
+    --sage: #4C5B4E;
+    --rule: #D9D4C7;
+    --error: #A33B2E;
+
+    --font-display: 'Fraunces', Georgia, serif;
+    --font-body: 'Inter', -apple-system, sans-serif;
+
+    --radius: 2px;
+    --container-width: 1180px;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html, body {
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4 {
+    font-family: var(--font-display);
+    font-weight: 500;
+    line-height: 1.1;
+    margin: 0 0 0.5em 0;
+    color: var(--ink);
+}
+
+h1 { font-size: 3rem; font-weight: 480; }
+h2 { font-size: 1.9rem; }
+h3 { font-size: 1.15rem; font-weight: 600; font-family: var(--font-body); }
+
+p { margin: 0 0 1em 0; max-width: 62ch; }
+
+a {
+    color: var(--walnut);
+    text-decoration: none;
+}
+a:hover { color: var(--walnut-deep); }
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+    outline: 2px solid var(--walnut);
+    outline-offset: 2px;
+}
+
+button, input, select {
+    font-family: var(--font-body);
+    font-size: 1rem;
+}
+
+.page-container {
+    max-width: var(--container-width);
+    margin: 0 auto;
+    padding: 0 32px;
+}
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 24px;
+    border: 1px solid var(--ink);
+    border-radius: var(--radius);
+    background: transparent;
+    color: var(--ink);
+    font-size: 0.95rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.btn--primary {
+    background: var(--ink);
+    color: var(--surface);
+    border-color: var(--ink);
+}
+.btn--primary:hover {
+    background: var(--walnut-deep);
+    border-color: var(--walnut-deep);
+    color: white;
+}
+
+.btn--ghost {
+    border-color: var(--rule);
+    color: var(--ink-soft);
+}
+.btn--ghost:hover {
+    border-color: var(--ink);
+    color: var(--ink);
+}
+
+.btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.btn--full { width: 100%; }
+
+.hairline {
+    border: none;
+    border-top: 1px solid var(--rule);
+    margin: 40px 0;
+}
+
+.meta {
+    color: var(--ink-soft);
+    font-size: 0.85rem;
+}
+
+.error-text {
+    color: var(--error);
+    font-size: 0.9rem;
+}
+
+.empty-state {
+    padding: 80px 0;
+    text-align: center;
+    color: var(--ink-soft);
+}
+.empty-state h3 {
+    color: var(--ink);
+    margin-bottom: 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+}
+
+@media (max-width: 720px) {
+    h1 { font-size: 2.2rem; }
+    .page-container { padding: 0 20px; }
+}
