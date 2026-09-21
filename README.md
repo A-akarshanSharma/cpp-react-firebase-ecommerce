@@ -1,66 +1,115 @@
-# Phase 1: Auth + One Firestore Read/Write
+# Full-Stack E-Commerce Platform
 
-## Step 0 — Firebase Console (no code, do this first)
+A full-stack e-commerce web application built with **C++**, **Drogon**, **React**, and **Firebase**.
 
-1. Go to https://console.firebase.google.com → Create Project
-2. Enable **Firestore Database** (start in test mode for now — lock down rules later)
-3. Enable **Authentication** (turn on Email/Password provider, at minimum)
-4. Enable **Storage**
-5. Go to Project Settings → Service Accounts → **Generate new private key**
-   → this downloads a JSON file. **Never commit this to git.** Save it as `service-account.json` in this project root.
-6. Note your **Project ID** (shown in Project Settings → General) — you'll need it.
+> **Status:** Ongoing development
 
-## Step 1 — Install dependencies (Ubuntu/WSL)
+## Tech Stack
 
-```bash
-sudo apt update
-sudo apt install -y git gcc g++ cmake libjsoncpp-dev uuid-dev \
-    zlib1g-dev libssl-dev postgresql-server-dev-all sqlite3 libsqlite3-dev
+- **Frontend:** React, Vite, JavaScript, HTML, CSS
+- **Backend:** C++, Drogon, REST APIs, JWT, CMake
+- **Cloud / Database:** Firebase Authentication, Firestore, Firebase Storage
+- **Testing / Tools:** Git, GitHub, CTest, Python HTTP smoke tests, Ubuntu/WSL2
 
-# Build Drogon from source (safest way to get a recent version)
-git clone https://github.com/drogonframework/drogon
-cd drogon
-git submodule update --init
-mkdir build && cd build
-cmake ..
-make -j$(nproc)
-sudo make install
+## Current Work
 
-# jwt-cpp (header-only, needs OpenSSL which you already installed)
-git clone https://github.com/Thalhammer/jwt-cpp
-sudo cp -r jwt-cpp/include/jwt-cpp /usr/local/include/
-sudo cp -r jwt-cpp/include/picojson /usr/local/include/ 2>/dev/null || true
+- C++ REST backend using Drogon
+- Firebase project and Firestore integration
+- Firebase Authentication setup
+- JWT and environment-based configuration
+- Secure service-account handling
+- CMake build workflow
+- Backend tests and HTTP smoke tests
+- React/Vite frontend foundation
 
-# nlohmann/json (header-only)
-sudo apt install -y nlohmann-json3-dev
+## Planned Features
+
+- Product listing and product details
+- User authentication
+- Shopping cart
+- Checkout and order history
+- Inventory management
+- Admin dashboard
+- Product and order management
+
+## Project Structure
+
+```text
+frontend/          React/Vite frontend
+src/               C++ backend source
+tests/backend/     Backend tests
+docs/              Setup and implementation notes
+CMakeLists.txt      Backend build configuration
+.env.example        Environment template
 ```
 
-## Step 2 — Configure
+## Backend Setup
 
 ```bash
 cp .env.example .env
-# edit .env: set FIREBASE_PROJECT_ID to your project id
-# make sure service-account.json is in this folder
-```
-
-## Step 3 — Build & run
-
-```bash
-mkdir build && cd build
+mkdir -p build && cd build
 cmake ..
 make -j$(nproc)
 ./phase1_server
 ```
 
-Then in another terminal:
-```bash
-curl http://localhost:8080/test-write
-curl http://localhost:8080/test-read
+Set `FIREBASE_PROJECT_ID` in `.env` and keep `service-account.json` in the project root.
+
+**Never commit:**
+
+```text
+service-account.json
+.env
+frontend/.env
 ```
 
-If `test-write` returns success and `test-read` returns the doc back, **Phase 1 checkpoint is done.**
+## Frontend Setup
 
-## What to send me if it breaks
-- The exact `cmake` or `make` error output (dependency/build issues are common and fixable)
-- The exact JSON response from `/test-write` (Firestore's error messages are usually specific — e.g. permission denied, invalid token, malformed request)
-- Confirm: does `service-account.json` actually exist in the project root and did you set `FIREBASE_PROJECT_ID` correctly in `.env`?
+```bash
+cd frontend
+npm install
+cp .env.example .env
+npm run dev
+```
+
+Add the Firebase web configuration values to `frontend/.env`.
+
+## Testing
+
+```bash
+ctest --test-dir build --output-on-failure
+python3 tests/backend/http_smoke.py build/phase1_server
+```
+
+The HTTP smoke tests use synthetic credentials and do not access live Firestore data.
+
+## Architecture
+
+```text
+React Client
+     |
+     v
+  REST API
+     |
+     v
+Drogon Backend
+     |
+     v
+Firebase / Firestore
+```
+
+The frontend communicates with the C++ backend through REST APIs, while server-side Firebase credentials remain private.
+
+## Security
+
+- Service-account credentials excluded from Git
+- Environment files excluded from Git
+- Public test Firestore endpoints removed
+- Backend-controlled Firestore access
+- Token-based authentication architecture
+
+## Status
+
+The project is actively being expanded with product, cart, order, inventory, and admin workflows.
+
+**Author:** Aakarshan Sharma
