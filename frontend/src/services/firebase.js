@@ -1,7 +1,6 @@
 import { initializeApp } from 'firebase/app'
 import { getAuth } from 'firebase/auth'
-
-const firebaseConfig = {
+const config = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
@@ -9,6 +8,11 @@ const firebaseConfig = {
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 }
-
-const app = initializeApp(firebaseConfig)
-export const auth = getAuth(app)
+export let auth = null
+export let authConfigurationError = ''
+try {
+  if (!config.apiKey || !config.projectId || !config.appId) throw new Error('Missing configuration')
+  auth = getAuth(initializeApp(config))
+} catch {
+  authConfigurationError = 'Sign-in is not configured. Please contact the store owner.'
+}

@@ -1,17 +1,63 @@
-# Secrets - NEVER commit these
-service-account.json
+# ============================================================
+# Secrets / environment files - NEVER COMMIT
+# ============================================================
 .env
-frontend/.env
+.env.*
+!.env.example
 
-# External library sources
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+
+deploy/.env
+deploy/.env.*
+
+service-account.json
+deploy/secrets/
+
+# ============================================================
+# External libraries cloned locally
+# ============================================================
 drogon/
 jwt-cpp/
 
+# ============================================================
 # Build artifacts
+# ============================================================
 build/
-frontend/node_modules/
+build-correctness/
 frontend/dist/
+frontend/node_modules/
 
-# OS/editor noise
+# ============================================================
+# Runtime / uploaded data
+# ============================================================
+uploads/
+
+# ============================================================
+# Frontend test artifacts
+# ============================================================
+frontend/test-results/
+frontend/playwright-report/
+coverage/
+
+# ============================================================
+# Python/cache artifacts
+# ============================================================
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# ============================================================
+# Local AI / development notes
+# ============================================================
+Codex Prompt — Rebuild E-commerce Frontend.md
+backend-status-summary.md
+
+# ============================================================
+# Editor / OS noise
+# ============================================================
 .DS_Store
 *.swp
+.vscode/
+.idea/docs/

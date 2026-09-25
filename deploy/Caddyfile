@@ -1,0 +1,30 @@
+{
+	email {$ACME_EMAIL}
+}
+{$SITE_HOST} {
+	encode gzip
+	header X-Robots-Tag "noindex, nofollow, noarchive"
+	header X-Content-Type-Options nosniff
+	header Referrer-Policy strict-origin-when-cross-origin
+	header X-Frame-Options DENY
+	# Restricts BOTH the site and API. Use direct DNS, without an additional CDN/proxy.
+	@blocked not remote_ip {$PREVIEW_ALLOWED_IPS}
+	handle @blocked {
+		respond "Private preview: access is restricted." 403
+	}
+	handle_path /api/* {
+		reverse_proxy backend:8080 {
+			# Replace any browser-supplied value. Drogon trusts only this container's exact IP.
+			header_up X-Real-IP {remote_host}
+		}
+	}
+	handle {
+		root * /srv
+		# Preserve React routes on refresh; do not cache the app shell across deployments.
+		route {
+			try_files {path} /index.html
+			header /index.html Cache-Control "no-cache"
+			file_server
+		}
+	}
+}

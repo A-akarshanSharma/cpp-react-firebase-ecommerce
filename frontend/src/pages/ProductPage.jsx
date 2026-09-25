@@ -1,91 +1,127 @@
-import { useEffect, useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useCallback, useEffect, useState } from 'react'
+import { Link, useParams } from 'react-router-dom'
 import { api } from '../services/api'
-import { useAuth } from '../context/AuthContext'
+import { useResource } from '../hooks/useResource'
+import { useCatalog } from '../context/CatalogContext'
 import { useCart } from '../context/CartContext'
-
+import ProductCard, { AddToCartButton } from '../components/ProductCard'
+import { ErrorState, Loader, ProductImage, QuantityPicker, Icon } from '../components/common/UI'
+import { money, categoryLink } from '../utils/format'
 export default function ProductPage() {
-  const { id } = useParams()
-  const navigate = useNavigate()
-  const { user } = useAuth()
-  const { addItem } = useCart()
-
-  const [product, setProduct] = useState(null)
-  const [quantity, setQuantity] = useState(1)
-  const [loading, setLoading] = useState(true)
-  const [message, setMessage] = useState(null)
-  const [adding, setAdding] = useState(false)
-
-  useEffect(() => {
-    setLoading(true)
-    api.getProduct(id).then(setProduct).finally(() => setLoading(false))
+  const { id } = useParams(),
+    { products } = useCatalog(),
+    { items } = useCart()
+  const loader = useCallback(async () => {
+    const p = await api.getProduct(id)
+    return p.hasVariants ? { ...p, variants: await api.getVariants(id) } : p
   }, [id])
-
-  const handleAddToCart = async () => {
-    if (!user) {
-      navigate('/login')
-      return
-    }
-    setAdding(true)
-    setMessage(null)
-    const result = await addItem(product.id, quantity)
-    setAdding(false)
-    if (result.ok) {
-      setMessage({ type: 'success', text: 'Added to cart.' })
-    } else {
-      setMessage({
-        type: 'error',
-        text: result.available !== undefined
-          ? `Only ${result.available} left in stock.`
-          : result.error,
-      })
-    }
-  }
-
-  if (loading) return <div className="page-container"><p className="meta">Loading…</p></div>
-  if (!product) return <div className="page-container"><p className="error-text">Product not found.</p></div>
-
-  const outOfStock = product.stock <= 0
-
+  const { data: baseProduct, loading, error, reload } = useResource(loader)
+  const [option, setOption] = useState('')
+  const product = baseProduct?.variants?.find((v) => v.id === option) || baseProduct
+  const [quantity, setQuantity] = useState(1)
+  useEffect(() => {
+    setQuantity(1)
+    setOption('')
+  }, [id])
+  const remaining = product
+    ? Math.max(0, product.stock - (items.find((i) => i.productId === product.id)?.quantity || 0))
+    : 0
+  useEffect(() => setQuantity((q) => Math.max(1, Math.min(q, remaining))), [remaining])
+  if (loading) return <Loader />
+  if (error)
+    return (
+      <div className="container section">
+        <Link to="/shop" className="text-link">
+          ← Back to the collection
+        </Link>
+        <ErrorState message={error} retry={reload} />
+      </div>
+    )
+  const related = products
+    .filter((p) => p.category === product.category && p.id !== product.id)
+    .slice(0, 4)
   return (
-    <div className="page-container">
+    <div className="container section">
+      <nav className="breadcrumbs" aria-label="Breadcrumb">
+        <Link to="/shop">The collection</Link>
+        <span>/</span>
+        <Link to={categoryLink(product.category)}>{product.category || 'Products'}</Link>
+        <span>/</span>
+        <span>{product.name}</span>
+      </nav>
       <div className="product-detail">
-        {product.imageUrl ? (
-          <img className="product-detail__image" src={product.imageUrl} alt={product.name} />
-        ) : (
-          <div className="product-detail__image" />
-        )}
-
-        <div>
-          <div className="product-detail__category">{product.category}</div>
+        <div className="detail-image">
+          <ProductImage src={product.imageUrl} name={product.name} />
+        </div>
+        <div className="detail-copy">
+          <p className="eyebrow">{product.category || 'STUDIO THREAD'}</p>
           <h1>{product.name}</h1>
-          <div className="product-detail__price">₹{product.price.toFixed(2)}</div>
-          <p className="product-detail__description">{product.description}</p>
-
-          <div className={`product-detail__stock ${product.stock > 3 ? 'product-detail__stock--ok' : 'product-detail__stock--low'}`}>
-            {outOfStock ? 'Out of stock' : product.stock <= 3 ? `Only ${product.stock} left` : 'In stock'}
+          <p className="detail-price">{money(product.price)}</p>
+          <span className={`availability ${product.stock <= 0 ? 'unavailable' : ''}`}>
+            {product.stock > 0 ? `${product.stock} in stock` : 'Out of stock'}
+          </span>
+          <p className="description">
+            {product.description || 'Discover this piece from our current collection.'}
+          </p>
+          {!!baseProduct.variants?.length && (
+            <label>
+              Choose an option
+              <select
+                value={option}
+                onChange={(e) => {
+                  setOption(e.target.value)
+                  setQuantity(1)
+                }}
+              >
+                <option value="">Default — {money(baseProduct.price)}</option>
+                {baseProduct.variants.map((v) => (
+                  <option value={v.id} key={v.id}>
+                    {v.variantLabel} — {money(v.price)} ({v.stock} in stock)
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <div className="detail-actions">
+            <QuantityPicker
+              value={quantity}
+              max={remaining}
+              onChange={setQuantity}
+              disabled={!remaining}
+            />
+            <AddToCartButton product={product} quantity={quantity} />
           </div>
-
-          {!outOfStock && (
-            <div className="product-detail__actions">
-              <div className="quantity-picker">
-                <button onClick={() => setQuantity((q) => Math.max(1, q - 1))} aria-label="Decrease quantity">−</button>
-                <span>{quantity}</span>
-                <button onClick={() => setQuantity((q) => Math.min(product.stock, q + 1))} aria-label="Increase quantity">+</button>
-              </div>
-              <button className="btn btn--primary" onClick={handleAddToCart} disabled={adding}>
-                {adding ? 'Adding…' : 'Add to cart'}
-              </button>
-            </div>
+          {remaining < product.stock && (
+            <p className="muted">You already have {product.stock - remaining} in your bag.</p>
           )}
-
-          {message && (
-            <p className={message.type === 'error' ? 'error-text' : 'meta'} style={{ marginTop: 16 }}>
-              {message.text}
+          <div className="detail-assurance">
+            <Icon name="shield" /> Secure sign-in <span>·</span>
+            <Icon name="bag" /> Simple ordering
+          </div>
+          <details className="product-notes">
+            <summary>A note on ordering</summary>
+            <p>
+              Review your bag before confirming your order. Availability and prices are checked
+              again when your order is placed. No online payment is collected.
             </p>
-          )}
+          </details>
         </div>
       </div>
+      {related.length > 0 && (
+        <section className="section">
+          <div className="section-heading">
+            <h2>A little more to discover</h2>
+            <Link className="text-link" to={categoryLink(product.category)}>
+              Explore {product.category} ↗
+            </Link>
+          </div>
+          <div className="product-grid">
+            {related.map((p) => (
+              <ProductCard key={p.id} product={p} />
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   )
 }

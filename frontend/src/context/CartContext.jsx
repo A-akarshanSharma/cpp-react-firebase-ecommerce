@@ -1,69 +1,139 @@
-import { createContext, useContext, useEffect, useState, useCallback } from 'react'
+import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react'
 import { api } from '../services/api'
 import { useAuth } from './AuthContext'
-
-const CartContext = createContext(null)
-
+import { useToast } from './ToastContext'
+import { checkoutAttempt, clearCheckoutAttempt } from '../services/checkoutAttempt'
+const Context = createContext(null)
 export function CartProvider({ children }) {
-  const { user } = useAuth()
+  const { profile } = useAuth()
+  const uid = profile?.uid
+  const currentUid = useRef(uid)
+  currentUid.current = uid
+  const sequence = useRef(0)
+  const lock = useRef(false)
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(false)
-
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const notify = useToast()
   const refresh = useCallback(async () => {
-    if (!user) {
+    const request = ++sequence.current
+    if (!uid) {
       setItems([])
-      return
+      setLoading(false)
+      setError('')
+      return []
     }
     setLoading(true)
+    setError('')
     try {
-      const cart = await api.getCart()
-      setItems(cart)
+      const data = await api.getCart()
+      if (request === sequence.current && uid === currentUid.current) setItems(data)
+      return data
+    } catch (e) {
+      if (request === sequence.current) setError(e.message)
+      return null
     } finally {
-      setLoading(false)
+      if (request === sequence.current) setLoading(false)
     }
-  }, [user])
-
+  }, [uid])
   useEffect(() => {
+    setItems([])
     refresh()
+    return () => {
+      ++sequence.current
+    }
   }, [refresh])
-
-  // Every mutation returns {ok, error} instead of throwing, so pages can show
-  // a friendly message (e.g. "only 3 left") without a try/catch at every call site.
-  const addItem = async (productId, quantity = 1) => {
+  const mutate = async (action, message) => {
+    if (lock.current || !uid) return false
+    lock.current = true
+    setBusy(true)
     try {
-      await api.addToCart(productId, quantity)
-      await refresh()
-      return { ok: true }
-    } catch (err) {
-      return { ok: false, error: err.data?.error || err.message, available: err.data?.available }
+      await action()
+      if (uid !== currentUid.current) return false
+      const data = await refresh()
+      notify(
+        data ? message : `${message} Refresh the cart to see the latest details.`,
+        data ? 'success' : 'error',
+      )
+      return true
+    } catch (e) {
+      notify(
+        e.data?.available !== undefined
+          ? `${e.message}. Available stock: ${e.data.available}.`
+          : e.message,
+        'error',
+      )
+      return false
+    } finally {
+      lock.current = false
+      setBusy(false)
     }
   }
-
-  const updateItem = async (productId, quantity) => {
+  const placeOrder = async (shippingAddress, shippingMethod, pickupContact) => {
+    if (lock.current || !uid) return null
+    lock.current = true
+    setBusy(true)
     try {
-      await api.updateCartItem(productId, quantity)
-      await refresh()
-      return { ok: true }
-    } catch (err) {
-      return { ok: false, error: err.data?.error || err.message, available: err.data?.available }
+      const attempt = checkoutAttempt(
+        uid,
+        items[0]?.cartVersion,
+        shippingAddress,
+        shippingMethod,
+        items[0]?.quoteVersion,
+        pickupContact,
+      )
+      const order = await api.createOrder(attempt)
+      clearCheckoutAttempt(uid)
+      if (uid === currentUid.current) {
+        ++sequence.current
+        setItems([])
+        setError('')
+      }
+      return order
+    } catch (e) {
+      // 401/403 can arrive after an earlier ambiguous attempt; keep its key.
+      if (
+        [
+          'INVALID_INPUT',
+          'EMPTY_CART',
+          'CART_CHANGED',
+          'INVALID_CART',
+          'STOCK_UNAVAILABLE',
+          'SHIPPING_CHANGED',
+          'PRICE_CHANGED',
+          'QUOTE_REQUIRED',
+          'CHECKOUT_DISABLED',
+          'SHIPPING_UNAVAILABLE',
+        ].includes(e.data?.code)
+      )
+        clearCheckoutAttempt(uid)
+      throw e
+    } finally {
+      lock.current = false
+      setBusy(false)
     }
   }
-
-  const removeItem = async (productId) => {
-    await api.removeFromCart(productId)
-    await refresh()
-  }
-
-  const itemCount = items.reduce((sum, item) => sum + item.quantity, 0)
-  const total = items.reduce((sum, item) => sum + item.price * item.quantity, 0)
-
   return (
-    <CartContext.Provider value={{ items, loading, itemCount, total, addItem, updateItem, removeItem, refresh }}>
+    <Context.Provider
+      value={{
+        items: uid ? items : [],
+        loading,
+        busy,
+        error,
+        refresh,
+        placeOrder,
+        itemCount: uid ? items.reduce((s, i) => s + i.quantity, 0) : 0,
+        total: items.reduce((s, i) => s + i.price * i.quantity, 0),
+        addItem: (id, quantity = 1) =>
+          mutate(() => api.addToCart(id, quantity), 'Added to your bag.'),
+        updateItem: (id, quantity) =>
+          mutate(() => api.updateCartItem(id, quantity), 'Bag updated.'),
+        removeItem: (id) => mutate(() => api.removeFromCart(id), 'Item removed.'),
+      }}
+    >
       {children}
-    </CartContext.Provider>
+    </Context.Provider>
   )
 }
-
-export function useCart() {
-  return useContext(CartContext)
-}
+export const useCart = () => useContext(Context)

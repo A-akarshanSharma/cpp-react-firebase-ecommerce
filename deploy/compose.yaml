@@ -1,0 +1,70 @@
+name: studio-preview
+services:
+  backend:
+    build:
+      context: ..
+      dockerfile: deploy/backend.Dockerfile
+    restart: unless-stopped
+    init: true
+    environment:
+      APP_ENV_FILE: /dev/null
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:?Set a demo Firebase project ID}
+      SERVICE_ACCOUNT_PATH: /run/secrets/firebase_service_account
+      SERVER_HOST: 0.0.0.0
+      SERVER_PORT: '8080'
+      UPLOAD_DIRECTORY: /var/lib/store/uploads
+      ALLOWED_ORIGIN: https://${SITE_HOST:?Set the preview hostname}
+      TRUSTED_PROXY_IP: 172.30.90.2
+    secrets:
+      - firebase_service_account
+    volumes:
+      - uploads:/var/lib/store/uploads
+    networks:
+      preview:
+        ipv4_address: 172.30.90.3
+    # No host port: only Caddy reaches the API.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    logging:
+      driver: json-file
+      options: {max-size: '10m', max-file: '3'}
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/web.Dockerfile
+      args:
+        VITE_FIREBASE_API_KEY: ${VITE_FIREBASE_API_KEY:?Set Firebase web API key}
+        VITE_FIREBASE_AUTH_DOMAIN: ${VITE_FIREBASE_AUTH_DOMAIN:?Set Firebase auth domain}
+        VITE_FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID}
+        VITE_FIREBASE_APP_ID: ${VITE_FIREBASE_APP_ID:?Set Firebase web app ID}
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      SITE_HOST: ${SITE_HOST}
+      ACME_EMAIL: ${ACME_EMAIL:?Set an email for certificate notices}
+      PREVIEW_ALLOWED_IPS: ${PREVIEW_ALLOWED_IPS:?Set tester public IP addresses or CIDRs}
+    ports: ['80:80', '443:443']
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      preview:
+        ipv4_address: 172.30.90.2
+    logging:
+      driver: json-file
+      options: {max-size: '10m', max-file: '3'}
+secrets:
+  firebase_service_account:
+    file: ./secrets/service-account.json
+volumes:
+  uploads:
+  caddy_data:
+  caddy_config:
+networks:
+  preview:
+    ipam:
+      config:
+        - subnet: 172.30.90.0/24

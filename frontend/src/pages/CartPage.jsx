@@ -1,115 +1,130 @@
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { useCart } from '../context/CartContext'
-import { useAuth } from '../context/AuthContext'
-import { api } from '../services/api'
-
-export default function CartPage() {
-  const { user } = useAuth()
-  const { items, total, updateItem, removeItem, refresh } = useCart()
-  const navigate = useNavigate()
-  const [placing, setPlacing] = useState(false)
-  const [orderError, setOrderError] = useState(null)
-
-  const handlePlaceOrder = async () => {
-    setPlacing(true)
-    setOrderError(null)
-    try {
-      const order = await api.createOrder()
-      await refresh()
-      navigate('/orders', { state: { justPlacedOrderId: order.id } })
-    } catch (err) {
-      setOrderError(err.data?.error || err.message)
-    } finally {
-      setPlacing(false)
-    }
-  }
-
-  if (!user) {
-    return (
-      <div className="page-container">
-        <div className="empty-state">
-          <h3>Sign in to view your cart</h3>
-          <Link to="/login" className="btn btn--primary" style={{ marginTop: 16 }}>Sign in</Link>
-        </div>
-      </div>
-    )
-  }
-
-  if (items.length === 0) {
-    return (
-      <div className="page-container">
-        <div className="empty-state">
-          <h3>Your cart is empty</h3>
-          <p>Find something you like and it'll show up here.</p>
-          <Link to="/" className="btn btn--primary" style={{ marginTop: 16 }}>Browse shop</Link>
-        </div>
-      </div>
-    )
-  }
-
-  const hasUnavailable = items.some((item) => !item.available)
-
+import {
+  Button,
+  EmptyState,
+  ErrorState,
+  Icon,
+  Loader,
+  PageHeading,
+  ProductImage,
+  QuantityPicker,
+} from '../components/common/UI'
+import { money, productLink } from '../utils/format'
+export function CartSummary({ total, children, shippingFee = 0, showShipping = false }) {
   return (
-    <div className="page-container cart-page">
-      <h1>Your cart</h1>
-
-      {items.map((item) => (
-        <div className="cart-line" key={item.productId}>
-          {item.imageUrl ? (
-            <img className="cart-line__image" src={item.imageUrl} alt={item.name} />
-          ) : (
-            <div className="cart-line__image" />
-          )}
-          <div>
-            <div className="cart-line__name">{item.name}</div>
-            {!item.available && (
-              <div className="cart-line__unavailable">
-                {item.stock === 0 ? 'No longer available' : `Only ${item.stock} left — reduce quantity`}
-              </div>
-            )}
-            <div className="cart-line__price">₹{item.price.toFixed(2)} each</div>
-          </div>
-          <div className="cart-line__actions">
-            <div className="quantity-picker">
-              <button onClick={() => updateItem(item.productId, Math.max(1, item.quantity - 1))}>−</button>
-              <span>{item.quantity}</span>
-              <button onClick={() => updateItem(item.productId, item.quantity + 1)}>+</button>
-            </div>
-            <button className="cart-line__remove" onClick={() => removeItem(item.productId)}>Remove</button>
-          </div>
-        </div>
-      ))}
-
-      <div className="cart-summary">
-        <div className="cart-summary__row">
-          <span>Subtotal</span>
-          <span>₹{total.toFixed(2)}</span>
-        </div>
-        <div className="cart-summary__row cart-summary__total">
-          <span>Total</span>
-          <span>₹{total.toFixed(2)}</span>
-        </div>
-
-        {orderError && <p className="error-text" style={{ marginTop: 12 }}>{orderError}</p>}
-        {hasUnavailable && (
-          <p className="error-text" style={{ marginTop: 12 }}>
-            Resolve the unavailable items above before placing your order.
-          </p>
-        )}
-
-        <button
-          className="btn btn--primary btn--full"
-          style={{ marginTop: 20 }}
-          onClick={handlePlaceOrder}
-          disabled={placing || hasUnavailable}
-        >
-          {placing ? 'Placing order…' : 'Place order'}
-        </button>
-        <p className="meta" style={{ marginTop: 12 }}>
-          Payment isn't wired in yet — this creates the order directly. Real checkout/payment comes next.
-        </p>
+    <aside className="order-summary">
+      <p className="eyebrow">THE GOOD THINGS ADD UP</p>
+      <h2>Order summary</h2>
+      <div className="summary-line">
+        <span>Items subtotal</span>
+        <span>{money(total - shippingFee)}</span>
       </div>
+      {(showShipping || shippingFee > 0) && (
+        <div className="summary-line">
+          <span>Shipping</span>
+          <span>{money(shippingFee)}</span>
+        </div>
+      )}
+      <div className="summary-line summary-total">
+        <strong>Total</strong>
+        <strong>{money(total)}</strong>
+      </div>
+      <p className="field-help">Order total only. No online payment is collected.</p>
+      {children}
+      <div className="summary-note">
+        <Icon name="shield" size={17} /> Review first. Confirm when you’re ready.
+      </div>
+    </aside>
+  )
+}
+export default function CartPage() {
+  const { items, total, loading, busy, error, refresh, updateItem, removeItem, itemCount } =
+    useCart()
+  useEffect(() => {
+    refresh()
+  }, [refresh])
+  return (
+    <div className="container section">
+      <PageHeading
+        eyebrow="YOUR EVERYDAY FINDS"
+        title="Your shopping bag"
+        action={
+          <Link className="text-link" to="/shop">
+            Continue shopping <Icon name="arrow" />
+          </Link>
+        }
+      >
+        {itemCount} {itemCount === 1 ? 'item' : 'items'}, chosen by you.
+      </PageHeading>
+      {error ? (
+        <ErrorState message={error} retry={refresh} />
+      ) : loading && !items.length ? (
+        <Loader />
+      ) : !items.length ? (
+        <EmptyState title="A little room for something good" to="/shop">
+          Your bag is empty. Let’s find your next favorite.
+        </EmptyState>
+      ) : (
+        <div className="cart-layout">
+          <div className="cart-items">
+            {items.map((item) => (
+              <article className="cart-item" key={item.productId}>
+                <Link to={productLink(item.productId)}>
+                  <ProductImage src={item.imageUrl} name={item.name} />
+                </Link>
+                <div className="cart-item-info">
+                  <Link to={productLink(item.productId)}>
+                    <h3>{item.name}</h3>
+                  </Link>
+                  <p className="muted">{money(item.price)} each</p>
+                  {(!item.available || item.quantity > item.stock || item.quantity <= 0) && (
+                    <p className="form-error">
+                      {item.stock <= 0
+                        ? 'Unavailable. Please remove this item.'
+                        : `Only ${item.stock} available. Reduce your quantity.`}
+                    </p>
+                  )}
+                  <div className="cart-item-controls">
+                    <QuantityPicker
+                      value={item.quantity}
+                      max={item.stock}
+                      onChange={(q) => updateItem(item.productId, q)}
+                      disabled={busy || loading}
+                    />
+                    <Button
+                      variant="text"
+                      disabled={busy || loading}
+                      onClick={() => removeItem(item.productId)}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                </div>
+                <strong>{money(item.price * item.quantity)}</strong>
+              </article>
+            ))}
+          </div>
+          <CartSummary total={total}>
+            {items.some((i) => !i.available || i.quantity <= 0 || i.quantity > i.stock) ? (
+              <p className="form-error">Update unavailable items before continuing.</p>
+            ) : (
+              <Link
+                className={`btn primary ${busy || loading ? 'disabled-link' : ''}`}
+                aria-disabled={busy || loading}
+                to="/checkout"
+                onClick={(e) => {
+                  if (busy || loading) e.preventDefault()
+                }}
+              >
+                Proceed to checkout
+                <Icon name="arrow" />
+              </Link>
+            )}
+          </CartSummary>
+        </div>
+      )}
     </div>
   )
 }

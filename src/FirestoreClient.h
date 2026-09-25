@@ -1,53 +1,60 @@
 #pragma once
-#include <string>
+#include "Errors.h"
 #include "FirebaseAuth.h"
+#include "cache/CatalogCache.h"
+#include <functional>
 #include <nlohmann/json.hpp>
+#include <string>
+#include <vector>
 
-// Minimal Firestore REST wrapper. Just enough for phase 1: get + set a document.
-// Note: Firestore REST uses a typed document format (not plain JSON) -
-// this wrapper hides that conversion behind plain nlohmann::json in/out.
+// HTTP transport is injectable for isolated fault/concurrency tests. Production always
+// uses the authenticated Google REST transport constructed in main.cpp.
 class FirestoreClient
 {
-public:
+  public:
+    using Json = nlohmann::json;
+    struct Response
+    {
+        int status;
+        Json body;
+    };
+    using Transport = std::function<Response(const std::string &, const std::string &, const Json &)>;
+    struct Write
+    {
+        std::string collection, id;
+        Json fields;
+        std::vector<std::string> mask;
+        bool createOnly = false;
+        bool existsOnly = false;
+    };
     FirestoreClient(const std::string &projectId, FirebaseAuth &auth);
+    FirestoreClient(const std::string &projectId, Transport transport);
+    static Transport httpTransport(std::string baseUrl, std::function<std::string()> tokenProvider);
+    // Only a genuine 404 returns null. Every other failure throws DatabaseError.
+    Json getDocument(const std::string &collection, const std::string &id,
+                     const std::string &transaction = "");
+    Json dueOrders(int64_t now, const Json &after = nullptr);
+    Json listDocuments(const std::string &collection);
+    Json catalogProducts();
+    // Bounded history query, newest first; cursor is scoped to collection/filter.
+    Json historyPage(const std::string &collection, int limit = 25, const std::string &cursor = "",
+                     const std::string &field = "", const std::string &value = "");
+    Json queryEqual(const std::string &collection, const std::string &field, const Json &value,
+                    const std::string &transaction);
+    bool setDocument(const std::string &collection, const std::string &id, const Json &fields);
+    bool createDocument(const std::string &collection, const std::string &id, const Json &fields);
+    std::string addDocument(const std::string &collection, const Json &fields);
+    bool deleteDocument(const std::string &collection, const std::string &id);
+    Json transact(const std::function<Json(const std::string &, std::vector<Write> &)> &operation);
+    static Json toFields(const Json &plain);
+    static Json fromFields(const Json &doc);
 
-    // Writes/overwrites a document at collection/docId with the given plain JSON fields.
-    // Returns true on success.
-    bool setDocument(const std::string &collection,
-                      const std::string &docId,
-                      const nlohmann::json &fields);
-
-    // Reads a document, returns plain JSON fields (empty json if not found / error).
-    nlohmann::json getDocument(const std::string &collection,
-                                const std::string &docId);
-
-    // Lists all documents in a collection. Returns a JSON array, each item
-    // being the document's fields plus an "id" key. Empty array on error.
-    // NOTE: fetches everything in one call - fine at your traffic/data size,
-    // revisit with pagination only if a collection grows into the thousands.
-    nlohmann::json listDocuments(const std::string &collection);
-
-    // Creates a document with an auto-generated ID (Firestore picks it).
-    // Returns the new document's ID, or empty string on failure.
-    std::string addDocument(const std::string &collection,
-                             const nlohmann::json &fields);
-
-    // Deletes a document. Returns true on success (Firestore returns success
-    // even if the doc didn't exist, so this mainly signals a real request failure).
-    bool deleteDocument(const std::string &collection, const std::string &docId);
-
-private:
-    std::string projectId_;
-    FirebaseAuth &auth_;
-    std::string baseUrl();
-
-    // Converts plain JSON -> Firestore's typed document format for writes.
-    nlohmann::json toFirestoreFields(const nlohmann::json &plain);
-    // Converts Firestore's typed document format -> plain JSON for reads.
-    nlohmann::json fromFirestoreFields(const nlohmann::json &firestoreDoc);
-
-    // Recursive single-value converters - handle nesting (arrays of objects, etc),
-    // used internally by toFirestoreFields/fromFirestoreFields above.
-    nlohmann::json toFirestoreValue(const nlohmann::json &val);
-    nlohmann::json fromFirestoreValue(const nlohmann::json &wrapped);
+  private:
+    CatalogCache catalogCache_;
+    std::string root_;
+    Transport transport_;
+    Json call(const std::string &method, const std::string &path, const Json &body = nullptr,
+              bool allowMissing = false);
+    Json writeJson(const Write &write) const;
+    static std::string segment(const std::string &value);
 };

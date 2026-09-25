@@ -2,13 +2,17 @@
 
 A full-stack e-commerce web application built with **C++**, **Drogon**, **React**, and **Firebase**.
 
-> **Status:** Ongoing development
+> **Status:** Working storefront/backend; preparing a private demo deployment.
+
+## Start here: private preview
+
+Follow [deploy/README.md](deploy/README.md) for the single-server Docker Compose package: HTTPS, restricted tester access, persistent images, environment configuration and verification. The preview uses sample data and collects no payments. Hosting/domain/Firebase preview configuration must be supplied before publishing.
 
 ## Tech Stack
 
 - **Frontend:** React, Vite, JavaScript, HTML, CSS
 - **Backend:** C++, Drogon, REST APIs, JWT, CMake
-- **Cloud / Database:** Firebase Authentication, Firestore, Firebase Storage
+- **Cloud / Database:** Firebase Authentication, Firestore; product images currently use local persistent disk
 - **Testing / Tools:** Git, GitHub, CTest, Python HTTP smoke tests, Ubuntu/WSL2
 
 ## Current Work
@@ -20,9 +24,9 @@ A full-stack e-commerce web application built with **C++**, **Drogon**, **React*
 - Secure service-account handling
 - CMake build workflow
 - Backend tests and HTTP smoke tests
-- React/Vite frontend foundation
+- React/Vite storefront, customer checkout and admin screens
 
-## Planned Features
+## Implemented Features
 
 - Product listing and product details
 - User authentication
@@ -46,6 +50,9 @@ CMakeLists.txt      Backend build configuration
 ## Backend Setup
 
 ```bash
+# Install native build prerequisites first (Ubuntu):
+sudo apt-get install -y cmake g++ libjsoncpp-dev uuid-dev zlib1g-dev libssl-dev libpng-dev nlohmann-json3-dev
+# Install Drogon v1.9.13 and jwt-cpp v0.7.1 as shown in deploy/backend.Dockerfile.
 cp .env.example .env
 mkdir -p build && cd build
 cmake ..
@@ -66,8 +73,9 @@ frontend/.env
 ## Frontend Setup
 
 ```bash
+# Use Node 24 (frontend/.nvmrc).
 cd frontend
-npm install
+npm ci --ignore-scripts
 cp .env.example .env
 npm run dev
 ```
@@ -110,6 +118,6 @@ The frontend communicates with the C++ backend through REST APIs, while server-s
 
 ## Status
 
-The project is actively being expanded with product, cart, order, inventory, and admin workflows.
+Product, cart, checkout, inventory and admin workflows are implemented. Payments are deferred. Public launch requires additional operational/customer-policy work; the deployment package targets a private preview.
 
 **Author:** Aakarshan Sharma

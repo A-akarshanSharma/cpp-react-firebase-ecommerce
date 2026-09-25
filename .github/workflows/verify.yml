@@ -1,0 +1,125 @@
+name: Store verification
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+  merge_group:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: verify-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  backend:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install native dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake g++ libjsoncpp-dev uuid-dev zlib1g-dev libssl-dev libpng-dev nlohmann-json3-dev
+          git clone --depth 1 --branch v1.9.13 --recurse-submodules --shallow-submodules https://github.com/drogonframework/drogon.git "$RUNNER_TEMP/drogon"
+          cmake -S "$RUNNER_TEMP/drogon" -B "$RUNNER_TEMP/drogon-build" -DCMAKE_BUILD_TYPE=Release -DBUILD_CTL=OFF -DBUILD_EXAMPLES=OFF -DBUILD_TESTING=OFF -DBUILD_ORM=OFF
+          cmake --build "$RUNNER_TEMP/drogon-build" -j2
+          sudo cmake --install "$RUNNER_TEMP/drogon-build"
+          sudo ldconfig
+          git clone --depth 1 --branch v0.7.1 https://github.com/Thalhammer/jwt-cpp.git "$RUNNER_TEMP/jwt-cpp"
+          sudo cp -r "$RUNNER_TEMP/jwt-cpp/include/jwt-cpp" /usr/local/include/
+          sudo cp -r "$RUNNER_TEMP/jwt-cpp/include/picojson" /usr/local/include/
+      - name: Build and test business logic, authentication and request runtime
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build -j2
+          ctest --test-dir build --output-on-failure
+      - name: Compiled HTTP and overload tests
+        run: |
+          python3 tests/backend/http_smoke.py build/phase1_server
+          python3 tests/backend/deployment_smoke.py build/phase1_server
+          python3 tests/backend/load_smoke.py build/backend_runtime_server
+      - name: Firestore integration tests (no production credentials)
+        run: |
+          curl --fail --location --retry 3 https://storage.googleapis.com/firebase-preview-drop/emulator/cloud-firestore-emulator-v1.22.0.jar -o "$RUNNER_TEMP/firestore.jar"
+          echo "9b6498b7f62714d67f48f59b3818883cd682dbcd46b9f59511de81c97bb5166c  $RUNNER_TEMP/firestore.jar" | sha256sum --check
+          java -jar "$RUNNER_TEMP/firestore.jar" --host 127.0.0.1 --port 8189 --project_id demo-studio-correctness --single_project_mode true > "$RUNNER_TEMP/firestore.log" 2>&1 &
+          emulator_pid=$!
+          trap 'kill "$emulator_pid" || true' EXIT
+          python3 scripts/wait-for-emulator.py
+          ./build/backend_emulator_tests
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: backend-test-logs
+          path: |
+            build/Testing/Temporary/LastTest.log
+            ${{ runner.temp }}/firestore.log
+  frontend:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --ignore-scripts
+      - run: npm audit --audit-level=moderate
+      - run: npm run test:unit
+      - run: npm run format:check
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm test -- --workers=2
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: browser-test-results
+          path: frontend/test-results
+  preview-package:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build preview images with synthetic web configuration
+        run: |
+          docker build -f deploy/backend.Dockerfile -t store-preview-backend .
+          docker build -f deploy/web.Dockerfile -t store-preview-web --build-arg VITE_FIREBASE_API_KEY=test-key --build-arg VITE_FIREBASE_AUTH_DOMAIN=demo-preview.firebaseapp.com --build-arg VITE_FIREBASE_PROJECT_ID=demo-preview --build-arg VITE_FIREBASE_APP_ID=test-app .
+      - name: Verify Caddy configuration and routing
+        run: |
+          docker run --rm -e SITE_HOST=preview.example.test -e ACME_EMAIL=test@example.test -e PREVIEW_ALLOWED_IPS=127.0.0.1/32 store-preview-web caddy adapt --config /etc/caddy/Caddyfile --adapter caddyfile > /dev/null
+          docker create --name caddy-binary store-preview-web
+          docker cp caddy-binary:/usr/bin/caddy "$RUNNER_TEMP/caddy"
+          docker rm caddy-binary
+          chmod +x "$RUNNER_TEMP/caddy"
+          python3 tests/deployment/proxy_smoke.py "$RUNNER_TEMP/caddy"
+      - name: Verify runtime image starts without build dependencies
+        run: |
+          printf '%s' '{"client_email":"test@example.invalid","private_key":"synthetic"}' > "$RUNNER_TEMP/preview-account.json"
+          chmod 644 "$RUNNER_TEMP/preview-account.json"
+          docker run -d --name preview-backend-check -p 127.0.0.1:18080:8080 -e APP_ENV_FILE=/dev/null -e FIREBASE_PROJECT_ID=demo-preview -e SERVICE_ACCOUNT_PATH=/run/secrets/test.json -e UPLOAD_DIRECTORY=/var/lib/store/uploads -v "$RUNNER_TEMP/preview-account.json:/run/secrets/test.json:ro" -v preview-test-uploads:/var/lib/store/uploads store-preview-backend
+          trap 'docker logs preview-backend-check; docker rm -f preview-backend-check; docker volume rm preview-test-uploads' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:18080/health; then break; fi
+            sleep 1
+          done
+          curl --fail --silent http://127.0.0.1:18080/health
+          docker exec preview-backend-check sh -c 'test -w /var/lib/store/uploads && test "$(id -u)" = 10001'
+  required-checks:
+    if: always()
+    needs: [backend, frontend, preview-package]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require every suite to pass
+        env:
+          BACKEND_RESULT: ${{ needs.backend.result }}
+          FRONTEND_RESULT: ${{ needs.frontend.result }}
+          PREVIEW_RESULT: ${{ needs.preview-package.result }}
+        run: test "$BACKEND_RESULT" = success && test "$FRONTEND_RESULT" = success && test "$PREVIEW_RESULT" = success
