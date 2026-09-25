@@ -61,3 +61,4 @@ backend-status-summary.md
 *.swp
 .vscode/
 .idea/docs/
+docs/
