@@ -1,10 +1,19 @@
 #include "Uploads.h"
+#include <drogon/HttpAppFramework.h>
 #include <drogon/utils/Utilities.h>
 #include <filesystem>
 #include <fstream>
 #include <png.h>
 namespace commerce
 {
+void configureUploadBodyLimits()
+{
+    drogon::app().setClientMaxBodySize(MaxUploadBytes);
+    // Drogon's default 64 KiB threshold spills raw bodies to ./uploads/tmp.
+    // Keep accepted bodies in memory: the non-root container cannot write there.
+    drogon::app().setClientMaxMemoryBodySize(MaxUploadBytes);
+}
+
 std::string sanitizedPng(const std::string &bytes)
 {
     if (bytes.size() > MaxUploadBytes)

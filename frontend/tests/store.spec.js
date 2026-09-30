@@ -214,7 +214,9 @@ async function setup(
       return reply({ error: 'Not authenticated: expired token' }, 401)
     if (path === '/admin/uploads') {
       expect(request.headers()['content-type']).toBe('image/png')
-      expect(request.postDataBuffer().subarray(1, 4).toString()).toBe('PNG')
+      expect([...request.postDataBuffer().subarray(0, 8)]).toEqual([
+        137, 80, 78, 71, 13, 10, 26, 10,
+      ])
       state.uploads++
       return reply({ id: 'a'.repeat(64), url: `/media/${'a'.repeat(64)}.png` })
     }

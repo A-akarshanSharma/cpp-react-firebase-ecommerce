@@ -3,6 +3,7 @@
 #include "controllers/AuthMiddleware.h"
 #include "controllers/ControllerSupport.h"
 #include "services/Ordering.h"
+#include "services/Uploads.h"
 #include "runtime/Proxy.h"
 #include <atomic>
 #include <cstdlib>
@@ -180,7 +181,7 @@ int main()
             sweepRunning = false;
     });
     drogon::app().setThreadNum(2);
-    drogon::app().setClientMaxBodySize(4 * 1024 * 1024);
+    commerce::configureUploadBodyLimits();
     drogon::app().addListener(env.count("SERVER_HOST") ? env["SERVER_HOST"] : "0.0.0.0", port);
     drogon::app().run();
     drogon::app().getLoop()->invalidateTimer(expiryTimer);
