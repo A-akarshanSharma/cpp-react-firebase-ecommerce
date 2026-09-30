@@ -1,0 +1,55 @@
+name: studio-local
+
+services:
+  backend:
+    build:
+      context: ..
+      dockerfile: deploy/backend.Dockerfile
+    restart: unless-stopped
+    init: true
+    environment:
+      APP_ENV_FILE: /dev/null
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID}
+      SERVICE_ACCOUNT_PATH: /run/secrets/firebase_service_account
+      SERVER_HOST: 0.0.0.0
+      SERVER_PORT: "8080"
+      UPLOAD_DIRECTORY: /var/lib/store/uploads
+      ALLOWED_ORIGIN: http://localhost
+    secrets:
+      - firebase_service_account
+    volumes:
+      - uploads:/var/lib/store/uploads
+    networks:
+      local:
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/web.local.Dockerfile
+      args:
+        VITE_FIREBASE_API_KEY: ${VITE_FIREBASE_API_KEY}
+        VITE_FIREBASE_AUTH_DOMAIN: ${VITE_FIREBASE_AUTH_DOMAIN}
+        VITE_FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID}
+        VITE_FIREBASE_APP_ID: ${VITE_FIREBASE_APP_ID}
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "8081:80"
+    networks:
+      local:
+
+secrets:
+  firebase_service_account:
+    file: ./secrets/service-account.json
+
+volumes:
+  uploads:
+
+networks:
+  local:
